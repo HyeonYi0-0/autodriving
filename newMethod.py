@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 
 CENTER = 320
-ADJUSTVAL = 15
+ADJUSTVAL = 10
 
 def roi(image):
     shape = np.array([[(int(640*0), int(480*0)),
@@ -45,16 +45,41 @@ def wrapping(image):
 def getLineX(img, horizonY) :
     adjustY = horizonY + ADJUSTVAL
     horizonLineArr = img[adjustY]
+    down = adjustY
+    up = adjustY
     leftlimit = CENTER - 10
     rightlimit = CENTER + 10
     leftX = np.argmax(horizonLineArr[:leftlimit])
     rightX = 640 - np.argmax(horizonLineArr[rightlimit:][::-1])
     
+    # 양쪽이 감지되지 않을 때 한쪽이라도 감지할 수 있는지 찾는다. (아래부터)
+    while(down < 480 and leftX == 0 and rightX == 640) :
+      down += 2
+      horizonLineArr = img[down]
+      leftX = np.argmax(horizonLineArr[:leftlimit])
+      rightX = 640 - np.argmax(horizonLineArr[rightlimit:][::-1])
+    
+    # 하나라도 찾지 못했다면
+    if down >= 480 :
+      # 위 방향으로 찾아본다.
+      while(up > 100 and leftX == 0 and rightX == 640) :
+        up -= 2
+        horizonLineArr = img[up]
+        leftX = np.argmax(horizonLineArr[:leftlimit])
+        rightX = 640 - np.argmax(horizonLineArr[rightlimit:][::-1])
+    
+    # 한쪽이라도 감지가 된다면 근데 직선 구간이면 그리고 한쪽으로 치우쳐져 있다면
+    if horizonY < 270 :
+      if (leftX != 0 and rightX == 640) and leftX < (leftlimit-leftX): # 왼쪽 라인 감지
+        rightX = leftlimit
+      elif (leftX == 0 and rightX != 640) and (640-rightX) < (rightX-rightlimit) :
+        leftX = rightlimit                                             #오른쪽 라인 감지 
+    
     return leftX, rightX
 
 def getHorizonY(img) :
   ## img는 w: 640, h: 480의 2차원 배열(480 X 640)
-  y = 150                    # 기본 값
+  y = 200                    # 기본 값
   while(img[y][320] != 0) :  # width 좌표가 320인 지점에서 y값을 증가시키며 
     y += 1                   # 흰색에서 검은색으로 변하는 지점을 찾음
     
@@ -83,13 +108,21 @@ step1
       ROI영역 직선일 때는 멀리 보고, 곡선일 때는 가까이 보자(지평선을 찾는 알고리즘이 필요)
       ==> width 기준이 midpoint면 height 기준은 지평선
       detection이 되지 않을 때:
-        직선 구간 && 곡선 구간에서 차선이 끊긴 경우:
-          최대한 추출된 x좌표에서 steering
-          그리고 이전에 주행하던 각도 참고해서 방향 설정 보완
-        
-        방지턱에서 차선이 감지되지 않는 경우:
-          이전 주행하던 각도와 스피드로 방향 설정 보완
-          아니면 default 주행 영역을 설정
+        한쪽이 안되는 경우:
+          수평선이 낮을 때(코너링 구간) horizonY >= 270:
+            디폴트 값 설정으로 해결
+          
+          수평선이 높을 때(직선 구간) horizonY < 270:
+            한쪽으로 너무 치우쳐져 있으면 mid 값과 감지된 한쪽 부분의 x좌표를 디폴트로 하자
+            
+        양쪽이 안되는 경우(디폴트 값으로 0과 640이 설정될 때):
+          수평선이 낮을 때(코너링 구간):
+            기존의 horizontal line을 내린다. (한쪽이라도 감지될 때까지)
+            근데 감지가 되지 않는다. 
+          
+          수평선이 높을 때(직선 구간):
+            기존의 horizontal line을 내린다. (한쪽이라도 감지될 때까지)
+            근데 감지가 되지 않는다. (i == 480이다.) 그러면 0과 640으로 함.
       
 step2
   steering: 일단 완료
