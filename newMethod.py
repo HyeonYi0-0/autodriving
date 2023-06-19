@@ -6,10 +6,10 @@ ADJUSTVAL = 10
 temp = 100
 
 def roi(image):
-    shape = np.array([[(int(640*0), int(480*0)),
-                       (int(640*1), int(480*0)),
-                       (int(640*0.75), int(480*1)),
-                       (int(640*0.25), int(480*1))]])
+    shape = np.array([[(int(640*0), int(480*0.2)),
+                       (int(640*1), int(480*0.2)),
+                       (int(640*1), int(480*1)),
+                       (int(640*0), int(480*1))]])
 
     mask = np.zeros_like(image)
 
@@ -43,80 +43,173 @@ def wrapping(image):
     
     return _image
 
-lineThickness = 20
-def getTrueLeftLine(inner, out) :
-  criteria = CENTER // 2
-  lineX = out
+# lineThickness = 20
+# def getTrueLeftLine(inner, out) :
+#   criteria = CENTER // 2
+#   lineX = out
   
-  if (inner-out > lineThickness) and (np.abs(criteria-inner) < np.abs(criteria-out)):
-    lineX = inner
+#   if (inner-out > lineThickness) and (np.abs(criteria-inner) < np.abs(criteria-out)):
+#     lineX = inner
     
-  return lineX
+#   return lineX
 
-def getTrueRightLine(inner, out) :
-  criteria = (CENTER // 2) * 3
-  lineX = out
+# def getTrueRightLine(inner, out) :
+#   criteria = (CENTER // 2) * 3
+#   lineX = out
   
-  if (out-inner > lineThickness) and (np.abs(criteria-inner) < np.abs(criteria-out)):
-    lineX = inner
+#   if (out-inner > lineThickness) and (np.abs(criteria-inner) < np.abs(criteria-out)):
+#     lineX = inner
     
-  return lineX
+#   return lineX
 
+# def getLineX(img, horizonY) :
+#   bottom2horizon = 480 - horizonY
+#   upper = int(horizonY + np.round(bottom2horizon*0.1))
+#   lower = int(horizonY + np.round(bottom2horizon*0.9))
+
+#   upperImgArr = img[upper]
+#   lowerImgArr = img[lower]
+  
+#   out = np.argmax(upperImgArr[:CENTER])
+#   inner = CENTER - np.argmax(upperImgArr[:CENTER][::-1])
+#   upperLeft = getTrueLeftLine(inner, out)
+  
+#   out = 640 - np.argmax(upperImgArr[CENTER:][::-1])
+#   inner = CENTER + np.argmax(upperImgArr[CENTER:])
+#   upperRight = getTrueRightLine(inner, out)
+  
+#   out = np.argmax(lowerImgArr[:CENTER])
+#   inner = CENTER - np.argmax(lowerImgArr[:CENTER][::-1])
+#   lowerLeft = getTrueLeftLine(inner, out)
+  
+#   out = 640 - np.argmax(lowerImgArr[CENTER:][::-1])
+#   inner = CENTER + np.argmax(lowerImgArr[CENTER:])
+#   lowerRight = getTrueRightLine(inner, out)
+  
+#   upLen = upperRight - upperLeft
+#   lowLen = lowerRight - lowerLeft
+  
+#   if (upperLeft == 0 and upperRight != 640 and lowerLeft != 0 and lowerRight != 640) : # 3개 감지 왼쪽 상단 감지 X
+#     upperLeft = upperRight - lowLen
+#   elif (upperLeft != 0 and upperRight == 640 and lowerLeft != 0 and lowerRight != 640) : # 3개 감지 오른쪽 상단 감지 X
+#     upperRight = upperLeft + lowLen
+#   elif (upperLeft != 0 and upperRight != 640 and lowerLeft == 0 and lowerRight != 640) : # 3개 감지 왼쪽 하단 감지 X
+#     lowerLeft = lowerRight - upLen
+#   elif (upperLeft != 0 and upperRight != 640 and lowerLeft != 0 and lowerRight == 640) : # 3개 감지 오른쪽 하단 감지 X
+#     lowerRight = lowerLeft + upLen
+#   elif (upperLeft != 0 and lowerLeft != 0 and upperRight == 640 and lowerRight == 640) :
+#     mid = (upperLeft + lowerLeft) // 2
+#     direc = int(np.abs(upperLeft-lowerLeft) / float(upper-lower))
+#     if mid < (CENTER-mid) : # 왼쪽으로 너무 취우쳐져 있을 때
+#       upperRight = CENTER
+#       lowerRight = CENTER
+#     elif -3 < direc and direc < 3 : # 직선 구간일 때
+#       upperRight = 640 - upperLeft
+#       lowerRight = 640 - lowerLeft
+#   elif (upperRight != 640 and lowerRight != 640 and upperLeft == 0 and lowerLeft == 0) :
+#     mid = (upperRight + lowerRight) // 2
+#     direc = int(np.abs(upperRight-lowerRight) / float(upper-lower))
+#     if (640 - mid) < (mid - CENTER) : # 오른쪽으로 너무 취우쳐져 있을 때
+#       upperLeft = CENTER
+#       lowerLeft = CENTER
+#     elif -3 < direc and direc < 3  :
+#       upperLeft = 640 - upperRight
+#       lowerLeft = 640 - lowerRight
+
+#   return upperLeft, upperRight, lowerLeft, lowerRight
+
+# sliding window를 만들어서 한다 반반씩
+# 일단 분산을 구해서 특정 분산값에 따라 비정상인지 정상인지 판단한다.
+# 만약 비정상이라면 한쪽 라인에 따라 방향을 설정한다
+# 그리고 직선 구간에서는 지평선의 높이가 높을 때는 반반 Sliding 할 때 그 정도를 조절한다.
 def getLineX(img, horizonY) :
-  bottom2horizon = 480 - horizonY
-  upper = int(horizonY + np.round(bottom2horizon*0.1))
-  lower = int(horizonY + np.round(bottom2horizon*0.9))
+  debug_img = np.dstack((img, img, img))
+  
+  boxSize = 40 # 480 * 640 ==>20:  24 * 32 // 40:  12 * 16 // 480 * 0.2 = 96 
+  predleftX = 0
+  predrightX = 640
+  adjust = 0 if (horizonY < 265) else 40
+  
+  candiLeft = []
+  candiRight = []
+  leftLimit = CENTER - adjust
+  rightLimit = CENTER + adjust
+  
+  # startY = (boxSize // 2) + boxSize * (int(np.ceil(96 / boxSize)) - 1)
+  # startX = (boxSize // 2)
+  
+  startY = int(np.floor(96 / boxSize))
+  
+  leftImg = img[:, :CENTER]
+  rightImg = img[:, CENTER:][:, ::-1]
+  # cv2.imshow("hi", rightImg)
+  
+  # 왼쪽 먼저 해보자
+  for y in range(startY, 480, boxSize) :
+    maxi = 0
+    xPt = 0
+    for x in range(0, leftLimit, boxSize) :
+      left = x
+      right = x + boxSize
+      top = y
+      bottom = y + boxSize
+      
+      total = np.sum(leftImg[top:bottom, left:right])
+      if maxi < total :
+        maxi = total
+        xPt = x + (boxSize//2)
+      
+    candiRight.append(xPt)
+  
+  predleftX = int(np.mean(candiRight))
+  isLeftNormal = np.std(candiRight)
+  # print(predleftX, isLeftNormal)
 
-  upperImgArr = img[upper]
-  lowerImgArr = img[lower]
+  # 이제 오른쪽 해보자
+  for y in range(startY, 480, boxSize) :
+    maxi = 0
+    xPt = 640
+    for x in range(0, rightLimit, boxSize) :
+      left = x
+      right = x + boxSize
+      top = y
+      bottom = y + boxSize
+      
+      total = np.sum(rightImg[top:bottom, left:right])
+      if maxi < total :
+        maxi = total
+        xPt = x + (boxSize//2)
+      
+    candiLeft.append(xPt)
   
-  out = np.argmax(upperImgArr[:CENTER])
-  inner = CENTER - np.argmax(upperImgArr[:CENTER][::-1])
-  upperLeft = getTrueLeftLine(inner, out)
+  predrightX = 640 - int(np.mean(candiLeft))
+  isRightNormal = np.std(candiLeft)
+  # print(predrightX, isRightNormal)
   
-  out = 640 - np.argmax(upperImgArr[CENTER:][::-1])
-  inner = CENTER + np.argmax(upperImgArr[CENTER:])
-  upperRight = getTrueRightLine(inner, out)
+  cv2.line(debug_img, (predleftX, 240), (predrightX, 240), [0, 0, 255], 2)
+  cv2.imshow('debug', debug_img)
   
-  out = np.argmax(lowerImgArr[:CENTER])
-  inner = CENTER - np.argmax(lowerImgArr[:CENTER][::-1])
-  lowerLeft = getTrueLeftLine(inner, out)
+  # 비정상인 경우를 찾자
+  # 한쪽이 비정상이고 다른 한쪽이 정상일 때
+  # 정상인 쪽을 바탕으로 스티어링 
+  # 둘다 정상이긴 한데 한쪽으로 너무 붙었을 때 
+  if predleftX < (CENTER-predleftX) : # 왼쪽으로 너무 취우쳐져 있을 때
+    predrightX = CENTER
+  elif (640-predrightX) < (predrightX-CENTER) : # 오른쪽으로 너무 취우쳐져 있을 때
+    predleftX = CENTER
+  elif isLeftNormal >= 60 and isRightNormal < 60:
+    if isRightNormal < 20 :                    # 직선일 때
+      predleftX = 640 - predrightX
+    else :                                     # 곡선일 때
+      predleftX = 0
+  elif isLeftNormal < 60 and isRightNormal >= 60:
+    if isLeftNormal < 20 :                     # 직선일 때
+      predrightX = 640 - predleftX
+    else :                                     # 곡선일 때
+      predrightX = 640
   
-  out = 640 - np.argmax(lowerImgArr[CENTER:][::-1])
-  inner = CENTER + np.argmax(lowerImgArr[CENTER:])
-  lowerRight = getTrueRightLine(inner, out)
+  return predleftX, predrightX
   
-  upLen = upperRight - upperLeft
-  lowLen = lowerRight - lowerLeft
-  
-  if (upperLeft == 0 and upperRight != 640 and lowerLeft != 0 and lowerRight != 640) : # 3개 감지 왼쪽 상단 감지 X
-    upperLeft = upperRight - lowLen
-  elif (upperLeft != 0 and upperRight == 640 and lowerLeft != 0 and lowerRight != 640) : # 3개 감지 오른쪽 상단 감지 X
-    upperRight = upperLeft + lowLen
-  elif (upperLeft != 0 and upperRight != 640 and lowerLeft == 0 and lowerRight != 640) : # 3개 감지 왼쪽 하단 감지 X
-    lowerLeft = lowerRight - upLen
-  elif (upperLeft != 0 and upperRight != 640 and lowerLeft != 0 and lowerRight == 640) : # 3개 감지 오른쪽 하단 감지 X
-    lowerRight = lowerLeft + upLen
-  elif (upperLeft != 0 and lowerLeft != 0 and upperRight == 640 and lowerRight == 640) :
-    mid = (upperLeft + lowerLeft) // 2
-    direc = int(np.abs(upperLeft-lowerLeft) / float(upper-lower))
-    if mid < (CENTER-mid) : # 왼쪽으로 너무 취우쳐져 있을 때
-      upperRight = CENTER
-      lowerRight = CENTER
-    elif -3 < direc and direc < 3 : # 직선 구간일 때
-      upperRight = 640 - upperLeft
-      lowerRight = 640 - lowerLeft
-  elif (upperRight != 640 and lowerRight != 640 and upperLeft == 0 and lowerLeft == 0) :
-    mid = (upperRight + lowerRight) // 2
-    direc = int(np.abs(upperRight-lowerRight) / float(upper-lower))
-    if (640 - mid) < (mid - CENTER) : # 오른쪽으로 너무 취우쳐져 있을 때
-      upperLeft = CENTER
-      lowerLeft = CENTER
-    elif -3 < direc and direc < 3  :
-      upperLeft = 640 - upperRight
-      lowerLeft = 640 - lowerRight
-
-  return upperLeft, upperRight, lowerLeft, lowerRight
 
 def getHorizonY(img) :
   ## img는 w: 640, h: 480의 2차원 배열(480 X 640)
@@ -127,18 +220,14 @@ def getHorizonY(img) :
   return y
 
 # height은 지평선에 의해 조절됨
-def getAngleCalculated(upperLeft, upperRight, lowerLeft, lowerRight, horizonY) :
-    slopeY = (480 - horizonY) * 0.5
-    upperPoint = (upperLeft + upperRight) // 2
-    lowerPoint = (lowerLeft + lowerRight) // 2
-    
-    meanPoint = (upperPoint + lowerPoint) // 2
-    angle = ((meanPoint - CENTER) / float(slopeY)) * 50
+def getAngleCalculated(left, right) :
+    meanPoint = (left + right) // 2
+    angle = ((meanPoint - CENTER) / float(200)) * 50
     
     if angle > 50 : angle = 50
     elif angle < -50 : angle = -50
     
-    return int(np.round(angle)), meanPoint, slopeY
+    return int(np.round(angle)), meanPoint
   
 def getSpeed(horizonY, angle) :
   speed = 22
@@ -215,22 +304,24 @@ horizonY = getHorizonY(blackAndWhiteImg)
   
 ## 조감도 wrapped img
 wrapped_img = wrapping(blackAndWhiteImg)
-cv2.imshow('wrapped', wrapped_img)
+# cv2.imshow('wrapped', wrapped_img)
+
+# getLineX(wrapped_img, horizonY)
 
 # ##조감도 필터링 자르기
-# roi_img = roi(wrapped_img)
+roi_img = roi(wrapped_img)
 # cv2.imshow('roi', roi_img)
 
 # ## 선 찾기
-# upperLeft, upperRight, lowerLeft, lowerRight = getLineX(roi_img, horizonY)
+left, right = getLineX(roi_img, horizonY)
 # print(left, right)
 
-# angle, meanPoint, slopeY = getAngleCalculated(upperLeft, upperRight, lowerLeft, lowerRight, horizonY)
+angle, meanPoint= getAngleCalculated(left, right)
 # print(angle)
 
-# speed = getSpeed(horizonY, angle)
+speed = getSpeed(horizonY, angle)
 
-# cv2.arrowedLine(img, (320, 480), (meanPoint, (480-slopeY)), (0, 0, 255), 2)
-# cv2.imshow('result', img)
+cv2.arrowedLine(img, (320, 480), (meanPoint, (300)), (0, 0, 255), 2)
+cv2.imshow('result', img)
 cv2.waitKey(0)
 cv2.destroyAllWindows()
