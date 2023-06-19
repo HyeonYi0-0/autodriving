@@ -43,64 +43,6 @@ def wrapping(image):
     
     return _image
 
-# def getLineX(img, horizonY) :
-#   leftLimit = CENTER - 15
-#   rightLimit = CENTER + 15
-  
-#   bottom2horizon = 480 - horizonY
-#   upper = horizonY + np.round(bottom2horizon*0.25)
-#   lower = horizonY + np.round(bottom2horizon*0.75)
-#   upperImgArr = img[upper]
-#   lowerImgArr = img[lower]
-  
-#   upperLeft = np.argmax(upperImgArr[:leftLimit])
-#   upperRight = 640 - np.argmax(upperImgArr[rightLimit:][::-1])
-#   lowerLeft = np.argmax(lowerImgArr[:leftLimit])
-#   lowerRight = 640 - np.argmax(lowerImgArr[rightLimit:][::-1])
-  
-#   # upper에서 하나라도 감지되지 않으면 upper line을 위로 조정하면서 감지될 때까지 찾는다.
-#   adjustUpper = upper
-#   while (adjustUpper > 100 and (upperLeft == 0 and upperRight == 640)) :
-#     adjustUpper -= 1
-#     upperLeft = np.argmax(upperImgArr[:leftLimit])
-#     upperRight = 640 - np.argmax(upperImgArr[rightLimit:][::-1])
-  
-#   upLen = upperRight - upperLeft
-#   lowLen = lowerRight - lowerLeft
-#   if ((upperLeft != 0 and upperRight != 640 and lowerLeft != 0 and lowerRight != 640) # 4개 모두 감지되면서
-#        and (upLen > (lowLen+20))) : # 비정상일 때
-#     if np.abs(upperLeft - lowerLeft) > np.abs(upperRight - lowerRight) :
-#       upperLeft = upperRight - lowLen
-#       print(f'abnormal: upperLeft is {upperLeft}')
-#     else :
-#       upperRight = upperLeft + lowLen
-#       print(f'abnormal: upperRight is {upperRight}')
-#   elif (upperLeft == 0 and upperRight != 640 and lowerLeft != 0 and lowerRight != 640) : # 3개 감지 왼쪽 상단 감지 X
-#     upperLeft = upperRight - lowLen
-#   elif (upperLeft != 0 and upperRight == 640 and lowerLeft != 0 and lowerRight != 640) : # 3개 감지 오른쪽 상단 감지 X
-#     upperRight = upperLeft + lowLen
-#   elif (upperLeft != 0 and upperRight != 640 and lowerLeft == 0 and lowerRight != 640) : # 3개 감지 왼쪽 하단 감지 X
-#     lowerLeft = lowerRight - upLen
-#   elif (upperLeft != 0 and upperRight != 640 and lowerLeft != 0 and lowerRight == 640) : # 3개 감지 오른쪽 하단 감지 X
-#     lowerRight = lowerLeft + upLen
-#   elif (upperLeft != 0 and lowerLeft != 0) :
-#     mid = (upperLeft + lowerLeft) // 2
-#     if mid < (leftLimit-mid) : # 왼쪽으로 너무 취우쳐져 있을 때
-#       upperRight = leftLimit
-#       lowerRight = leftLimit
-#     elif horizonY < 270 : # 직선 구간일 때
-#       upperRight = upperLeft + temp
-#       lowerRight = lowerLeft + temp
-#   elif (upperRight != 640 and lowerRight != 640) :
-#     mid = (upperRight + lowerRight) // 2
-#     if (640 - mid) < (mid - rightLimit) : # 오른쪽으로 너무 취우쳐져 있을 때
-#       upperLeft = rightLimit
-#       lowerLeft = rightLimit
-#     elif horizonY < 270 :
-#       upperLeft = upperRight - temp
-#       lowerLeft = lowerRight - temp
-
-#   return upperLeft, upperRight, lowerLeft, lowerRight
 lineThickness = 20
 def getTrueLeftLine(inner, out) :
   criteria = CENTER // 2
